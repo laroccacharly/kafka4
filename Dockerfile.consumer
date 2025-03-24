@@ -1,0 +1,62 @@
+FROM apache/spark:3.5.0-scala2.12-java11-python3-ubuntu
+
+WORKDIR /opt/spark/work-dir
+
+USER root
+
+# Install dependencies for apt repository management
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends \
+    curl \
+    wget \
+    gnupg \
+    software-properties-common \
+    apt-transport-https \
+    ca-certificates \
+    build-essential \
+    librdkafka-dev \
+    && apt-get clean \
+    && rm -rf /var/lib/apt/lists/*
+
+# Create requirements with compatible versions
+RUN echo "confluent-kafka==2.3.0" > requirements-consumer.txt && \
+    echo "pandas==1.5.3" >> requirements-consumer.txt && \
+    echo "faker==20.1.0" >> requirements-consumer.txt && \
+    echo "pydantic==1.10.13" >> requirements-consumer.txt && \
+    echo "pyarrow==14.0.1" >> requirements-consumer.txt && \
+    echo "py4j==0.10.9.7" >> requirements-consumer.txt
+
+# Install dependencies using pip
+RUN pip3 install --no-cache-dir -r requirements-consumer.txt
+
+# Copy the Spark Kafka connector JAR to the Spark jars directory
+RUN wget -P $SPARK_HOME/jars/ https://repo1.maven.org/maven2/org/apache/spark/spark-sql-kafka-0-10_2.12/3.5.0/spark-sql-kafka-0-10_2.12-3.5.0.jar && \
+    wget -P $SPARK_HOME/jars/ https://repo1.maven.org/maven2/org/apache/kafka/kafka-clients/3.5.0/kafka-clients-3.5.0.jar && \
+    wget -P $SPARK_HOME/jars/ https://repo1.maven.org/maven2/org/apache/commons/commons-pool2/2.11.1/commons-pool2-2.11.1.jar && \
+    wget -P $SPARK_HOME/jars/ https://repo1.maven.org/maven2/org/apache/spark/spark-token-provider-kafka-0-10_2.12/3.5.0/spark-token-provider-kafka-0-10_2.12-3.5.0.jar && \
+    wget -P $SPARK_HOME/jars/ https://repo1.maven.org/maven2/org/apache/spark/spark-streaming-kafka-0-10_2.12/3.5.0/spark-streaming-kafka-0-10_2.12-3.5.0.jar && \
+    wget -P $SPARK_HOME/jars/ https://repo1.maven.org/maven2/org/apache/spark/spark-streaming-kafka-0-10-assembly_2.12/3.5.0/spark-streaming-kafka-0-10-assembly_2.12-3.5.0.jar
+
+# Create app directory and Ivy cache directory with proper permissions
+RUN mkdir -p /app/data /app/checkpoints /home/spark/.ivy2/cache /home/spark/.ivy2/jars && \
+    chmod -R 777 /home/spark/.ivy2 && \
+    chown -R spark:spark /app /home/spark/.ivy2
+
+# Copy source code
+COPY --chown=spark:spark . /app
+
+# Modify consume.py to remove dependency resolution at runtime
+RUN sed -i 's/\.config("spark.jars.packages", "org.apache.spark:spark-sql-kafka-0-10_2.12:3.5.0")//' /app/consume.py
+
+# Set Python path and Spark configs
+ENV PYTHONPATH=/app:/opt/spark/python:/opt/spark/python/lib/py4j-0.10.9.7-src.zip
+ENV PYSPARK_DRIVER_MEMORY=1g
+ENV PYSPARK_EXECUTOR_MEMORY=1g
+ENV SPARK_HOME=/opt/spark
+
+# Switch back to spark user for better security
+USER spark
+WORKDIR /app
+
+# Run consumer using python directly
+CMD ["python3", "consume.py"]
