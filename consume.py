@@ -4,6 +4,18 @@ import time
 from pyspark.sql import SparkSession
 from pyspark.sql.functions import from_json, col
 from pyspark.sql.types import StructType, StructField, StringType, FloatType, TimestampType
+import logging 
+from flask import Flask, jsonify
+
+# Configure logging
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+)
+logger = logging.getLogger(__name__)
+app = Flask(__name__)
+
+
 
 # Configuration
 BOOTSTRAP_SERVERS = os.environ.get('KAFKA_BOOTSTRAP_SERVERS', 'broker:9092')
@@ -11,7 +23,7 @@ TOPIC_NAME = 'locations'
 GROUP_ID = 'location-consumer'
 OUTPUT_DIR = './data'
 CHECKPOINT_DIR = './checkpoints'
-TIMEOUT = 5  # seconds to wait for new messages before terminating
+TIMEOUT = 3  # seconds to wait for new messages before terminating
 
 # Define the schema for the location events
 location_schema = StructType([
@@ -109,6 +121,19 @@ def main():
         print("Consumer stopped")
         spark.stop()
 
+# Server 
+@app.route('/', methods=['POST'])
+def consume():
+    """Endpoint to trigger data consumption from Kafka"""
+    try:
+        logger.info("Received request to consume data from Kafka")
+        main()  
+        return jsonify({"status": "success", "message": "Consumer completed"}), 200
+    except Exception as e:
+        logger.error(f"Error in consumer: {str(e)}")
+        return jsonify({"status": "error", "message": str(e)}), 500
+
+
 if __name__ == "__main__":
-    # Start consuming
-    main()
+    logger.info("Starting consumer service")
+    app.run(host='0.0.0.0', port=5000)

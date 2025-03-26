@@ -24,7 +24,8 @@ RUN echo "confluent-kafka==2.3.0" > requirements-consumer.txt && \
     echo "faker==20.1.0" >> requirements-consumer.txt && \
     echo "pydantic==1.10.13" >> requirements-consumer.txt && \
     echo "pyarrow==14.0.1" >> requirements-consumer.txt && \
-    echo "py4j==0.10.9.7" >> requirements-consumer.txt
+    echo "py4j==0.10.9.7" >> requirements-consumer.txt && \
+    echo "flask==2.3.3" >> requirements-consumer.txt
 
 # Install dependencies using pip
 RUN pip3 install --no-cache-dir -r requirements-consumer.txt
