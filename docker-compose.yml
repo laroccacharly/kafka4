@@ -28,6 +28,9 @@ services:
       context: .
       dockerfile: Dockerfile.producer
     container_name: producer
+    depends_on:
+      broker:
+        condition: service_healthy
     volumes:
       - ./produce.py:/app/produce.py
     environment:
@@ -52,18 +55,17 @@ services:
       SPARK_LOCAL_HOSTNAME: consumer
       SPARK_MASTER: local[*]
       SERVICE_TYPE: consumer
-    deploy:
-      resources:
-        limits:
-          cpus: '2'
-          memory: 2G
     
   api:
     build:
       context: .
       dockerfile: Dockerfile.api
+    container_name: api
     ports:
       - "5111:5000"
+    depends_on:
+      broker:
+        condition: service_healthy
 
 
 volumes:
