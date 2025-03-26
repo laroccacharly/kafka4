@@ -19,7 +19,7 @@ var/
 *.egg-info/
 .installed.cfg
 *.egg
-
+checkpoints/
 # Virtualenv
 venv/
 ENV/
