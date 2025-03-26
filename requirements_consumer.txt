@@ -1,0 +1,8 @@
+confluent-kafka==2.3.0
+pandas==1.5.3
+pyarrow==14.0.1
+pyspark==3.5.0 
+flask
+faker 
+pydantic 
+py4j
