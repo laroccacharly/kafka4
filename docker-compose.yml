@@ -45,7 +45,7 @@ services:
     volumes:
       - ./consume.py:/app/consume.py
       - ./data:/app/data
-      - spark-checkpoint:/app/checkpoints
+      - ./checkpoints:/app/checkpoints
     environment:
       KAFKA_BOOTSTRAP_SERVERS: broker:9092
       SPARK_LOCAL_IP: consumer
