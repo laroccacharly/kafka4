@@ -44,6 +44,7 @@ services:
         condition: service_healthy
     volumes:
       - ./consume.py:/app/consume.py
+      - ./data:/app/data
       - spark-checkpoint:/app/checkpoints
     environment:
       KAFKA_BOOTSTRAP_SERVERS: broker:9092

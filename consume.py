@@ -15,12 +15,9 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 app = Flask(__name__)
 
-
-
 # Configuration
 BOOTSTRAP_SERVERS = os.environ.get('KAFKA_BOOTSTRAP_SERVERS', 'broker:9092')
 TOPIC_NAME = 'locations'
-GROUP_ID = 'location-consumer'
 OUTPUT_DIR = './data'
 CHECKPOINT_DIR = './checkpoints'
 TIMEOUT = 3  # seconds to wait for new messages before terminating
@@ -42,11 +39,32 @@ def create_spark_session():
     """Create and return a Spark session."""
     return (SparkSession.builder
             .appName("Kafka Location Consumer")
-            .config("spark.sql.adaptive.enabled", "true")
+            .config("spark.sql.adaptive.enabled", "false")
             .config("spark.serializer", "org.apache.spark.serializer.KryoSerializer")
-            .config("spark.sql.shuffle.partitions", "8")  # Adjust based on your needs
-            .config("spark.default.parallelism", "8")    # Adjust based on your needs
+            .config("spark.sql.shuffle.partitions", "8")
+            .config("spark.default.parallelism", "8")
+            .config("spark.streaming.stopGracefullyOnShutdown", "true")
+            .config("spark.streaming.backpressure.enabled", "true")
+            .config("spark.task.maxFailures", "1")
             .getOrCreate())
+
+def process_batch(batch_df, batch_id):
+    """Process each batch of data."""
+    try:
+        # Generate timestamp for the batch
+        import datetime
+        timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+        output_path = f"{OUTPUT_DIR}/locations_{timestamp}_{batch_id}.parquet"
+        
+        # Write the batch to Parquet with overwrite mode
+        (batch_df.coalesce(1)  # Reduce partitions to 1 for small batches
+                 .write
+                 .mode("overwrite")
+                 .parquet(output_path))
+        
+        logger.info(f"Batch {batch_id}: Successfully wrote data to {output_path}")
+    except Exception as e:
+        logger.error(f"Error processing batch {batch_id}: {str(e)}")
 
 def main():
     """Main function to consume messages from Kafka using PySpark."""
@@ -58,81 +76,53 @@ def main():
     spark = create_spark_session()
     spark.sparkContext.setLogLevel("WARN")
     
-    print(f"Starting to consume from topic '{TOPIC_NAME}' using PySpark")
-    
-    # Read from Kafka
-    df = (spark
-          .readStream
-          .format("kafka")
-          .option("kafka.bootstrap.servers", BOOTSTRAP_SERVERS)
-          .option("subscribe", TOPIC_NAME)
-          .option("startingOffsets", "earliest")
-          .option("kafka.group.id", GROUP_ID)
-          .option("kafka.group.protocol", "consumer")  # Use new consumer protocol from Kafka 4.0
-          .option("failOnDataLoss", "false")
-          .load())
-    
-    # Parse the JSON value
-    parsed_df = (df
-                .selectExpr("CAST(value AS STRING)")
-                .select(from_json(col("value"), location_schema).alias("data"))
-                .select("data.*"))
-    
-    # Write the data to Parquet using foreachBatch
-    def write_batch(batch_df, batch_id):
-        if not batch_df.isEmpty():
-            # Generate a timestamp for the batch
-            import datetime
-            timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-            output_path = f"{OUTPUT_DIR}/locations_{timestamp}_{batch_id}.parquet"
-            
-            # Write the batch to Parquet
-            batch_df.write.parquet(output_path)
-            print(f"Batch {batch_id}: Wrote {batch_df.count()} records to {output_path}")
-    
-    # Execute the streaming query with timeout
-    stream_query = (parsed_df
-                   .writeStream
-                   .foreachBatch(write_batch)
-                   .option("checkpointLocation", CHECKPOINT_DIR)
-                   .trigger(processingTime="5 seconds")  # Process in 5-second batches
-                   .start())
-    
-    # Wait for either data to be processed or timeout
-    start_time = time.time()
-    last_progress_time = start_time
+    logger.info(f"Starting to consume from topic '{TOPIC_NAME}' using PySpark")
     
     try:
-        while True:
-            if stream_query.lastProgress is not None:
-                last_progress_time = time.time()
-            
-            # Check if we've exceeded the timeout with no new data
-            if time.time() - last_progress_time > TIMEOUT:
-                print(f"No new data received for {TIMEOUT} seconds. Stopping consumer.")
-                break
-            
-            time.sleep(1)
-            
-    except KeyboardInterrupt:
-        print("Consumer interrupted by user")
-    finally:
-        stream_query.stop()
-        print("Consumer stopped")
-        spark.stop()
+        # Read from Kafka
+        df = (spark
+              .readStream
+              .format("kafka")
+              .option("kafka.bootstrap.servers", BOOTSTRAP_SERVERS)
+              .option("subscribe", TOPIC_NAME)
+              .option("startingOffsets", "earliest")
+              .option("failOnDataLoss", "false")
+              .load())
 
-# Server 
+        # Parse the JSON value
+        parsed_df = (df
+                    .selectExpr("CAST(value AS STRING)")
+                    .select(from_json(col("value"), location_schema).alias("data"))
+                    .select("data.*"))
+
+        # Execute the streaming query using foreachBatch
+        stream_query = (parsed_df
+                       .writeStream
+                       .foreachBatch(process_batch)
+                       .option("checkpointLocation", CHECKPOINT_DIR)
+                       .trigger(processingTime="5 seconds")  # Process every 5 seconds
+                       .start())
+
+        # Wait for the query to terminate
+        stream_query.awaitTermination()
+
+    except Exception as e:
+        logger.error(f"Error in streaming query: {str(e)}")
+        raise
+    finally:
+        spark.stop()
+        logger.info("Consumer stopped")
+
 @app.route('/', methods=['POST'])
 def consume():
     """Endpoint to trigger data consumption from Kafka"""
     try:
         logger.info("Received request to consume data from Kafka")
-        main()  
+        main()
         return jsonify({"status": "success", "message": "Consumer completed"}), 200
     except Exception as e:
         logger.error(f"Error in consumer: {str(e)}")
         return jsonify({"status": "error", "message": str(e)}), 500
-
 
 if __name__ == "__main__":
     logger.info("Starting consumer service")
