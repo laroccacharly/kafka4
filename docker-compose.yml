@@ -26,16 +26,13 @@ services:
   producer:
     build:
       context: .
-      dockerfile: Dockerfile
+      dockerfile: Dockerfile.producer
     container_name: producer
-    depends_on:
-      broker:
-        condition: service_healthy
     volumes:
-      - .:/app
-    command: python produce.py
+      - ./produce.py:/app/produce.py
     environment:
       KAFKA_BOOTSTRAP_SERVERS: broker:9092
+      SERVICE_TYPE: producer
 
   consumer:
     build:
@@ -53,11 +50,20 @@ services:
       SPARK_LOCAL_IP: consumer
       SPARK_LOCAL_HOSTNAME: consumer
       SPARK_MASTER: local[*]
+      SERVICE_TYPE: consumer
     deploy:
       resources:
         limits:
           cpus: '2'
           memory: 2G
+    
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile.api
+    ports:
+      - "5111:5000"
+
 
 volumes:
   spark-checkpoint:

@@ -1,0 +1,13 @@
+FROM python:3.11-slim
+
+WORKDIR /app
+
+RUN pip install uv
+RUN uv init 
+RUN uv add flask requests 
+
+# Copy application files
+COPY api.py .
+
+# Run the API server
+CMD ["uv", "run", "api.py"]

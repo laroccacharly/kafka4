@@ -1,19 +1,28 @@
 # Creates the json data to push to kafka
 import json
 import os
-import time
 import random
 from datetime import datetime
 from typing import Dict, Any, List
 from faker import Faker
 from confluent_kafka import Producer
 from pydantic import BaseModel, Field
+import logging
+from flask import Flask, jsonify
+
+# Configure logging
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+)
+logger = logging.getLogger(__name__)
+app = Flask(__name__)
 
 # Configuration
 BOOTSTRAP_SERVERS = os.environ.get('KAFKA_BOOTSTRAP_SERVERS', 'broker:9092')
 TOPIC_NAME = 'locations'
 NUM_MESSAGES = 10
-SLEEP_TIME = 1  # seconds between batches
+BATCH_SIZE = 10
 
 # Data model for location events
 class LocationEvent(BaseModel):
@@ -69,10 +78,13 @@ def generate_batch(num_records: int = 10) -> List[Dict[str, Any]]:
 
 def main():
     """Main function to produce messages to Kafka."""
+    logger.info("Creating Kafka topic if it doesn't exist")
+    create_topic()
+    logger.info("Creating Kafka producer")
     producer = create_producer()
     
     try:
-        print(f"Starting to produce {NUM_MESSAGES} messages to topic '{TOPIC_NAME}'")
+        logger.info(f"Starting to produce {NUM_MESSAGES} messages to topic '{TOPIC_NAME}'")
         
         for i in range(NUM_MESSAGES):
             # Generate event data
@@ -92,29 +104,24 @@ def main():
             # Trigger any available delivery callbacks
             producer.poll(0)
             
-            print(f"Produced message {i+1}/{NUM_MESSAGES}")
+            logger.debug(f"Produced message {i+1}/{NUM_MESSAGES}")
             
-            # Sleep between messages
-            time.sleep(0.1)
-            
-            # Every 10 messages, sleep a bit longer to simulate batches
-            if (i + 1) % 10 == 0:
-                print(f"Completed batch {(i+1)//10}/{NUM_MESSAGES//10}")
-                time.sleep(SLEEP_TIME)
+            # Every BATCH_SIZE messages, print batch completion
+            if (i + 1) % BATCH_SIZE == 0:
+                logger.info(f"Completed batch {(i+1)//BATCH_SIZE}/{NUM_MESSAGES//BATCH_SIZE}")
                 
     except KeyboardInterrupt:
-        print("Producer interrupted by user")
+        logger.warning("Producer interrupted by user")
+    except Exception as e:
+        logger.error(f"Error producing messages: {str(e)}")
     finally:
         # Wait for any outstanding messages to be delivered
-        print("Flushing producer...")
+        logger.info("Flushing producer...")
         producer.flush()
-        print("Producer stopped")
+        logger.info("Producer stopped")
 
-if __name__ == "__main__":
-    # Wait for Kafka to be ready
-    time.sleep(5)
-    
-    # Create the topic if it doesn't exist
+def create_topic():
+    """Create the topic if it doesn't exist."""
     try:
         from confluent_kafka.admin import AdminClient, NewTopic
         admin = AdminClient({'bootstrap.servers': BOOTSTRAP_SERVERS})
@@ -133,6 +140,23 @@ if __name__ == "__main__":
             print(f"Topic '{TOPIC_NAME}' already exists")
     except Exception as e:
         print(f"Error creating topic: {e}")
+        
+
+# Server 
+@app.route('/', methods=['POST'])
+def produce():
+    """Endpoint to trigger data production to Kafka"""
+    try:
+        # Run producer in a thread so it doesn't block
+        # main()
+        logger.info("Received request to produce messages")
+        main()  
+        return jsonify({"status": "success", "message": "Producer completed"}), 200
+    except Exception as e:
+        logger.error(f"Error in producer: {str(e)}")
+        return jsonify({"status": "error", "message": str(e)}), 500
+
+if __name__ == "__main__":
+    # Create the topic if it doesn't exist
+    app.run(host='0.0.0.0', port=5000)
     
-    # Start producing
-    main()

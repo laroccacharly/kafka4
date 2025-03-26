@@ -1,0 +1,13 @@
+FROM python:3.11-slim
+
+WORKDIR /app
+
+# Install uv
+RUN pip install uv
+RUN uv init 
+RUN uv add confluent-kafka faker pydantic flask requests 
+
+# Copy source code
+COPY produce.py .
+
+CMD ["uv", "run", "produce.py"] 

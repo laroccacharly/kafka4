@@ -11,6 +11,7 @@ TOPIC_NAME = 'locations'
 GROUP_ID = 'location-consumer'
 OUTPUT_DIR = './data'
 CHECKPOINT_DIR = './checkpoints'
+TIMEOUT = 5  # seconds to wait for new messages before terminating
 
 # Define the schema for the location events
 location_schema = StructType([
@@ -77,7 +78,7 @@ def main():
             batch_df.write.parquet(output_path)
             print(f"Batch {batch_id}: Wrote {batch_df.count()} records to {output_path}")
     
-    # Execute the streaming query
+    # Execute the streaming query with timeout
     stream_query = (parsed_df
                    .writeStream
                    .foreachBatch(write_batch)
@@ -85,19 +86,29 @@ def main():
                    .trigger(processingTime="5 seconds")  # Process in 5-second batches
                    .start())
     
+    # Wait for either data to be processed or timeout
+    start_time = time.time()
+    last_progress_time = start_time
+    
     try:
-        # Keep the application running
-        stream_query.awaitTermination()
+        while True:
+            if stream_query.lastProgress is not None:
+                last_progress_time = time.time()
+            
+            # Check if we've exceeded the timeout with no new data
+            if time.time() - last_progress_time > TIMEOUT:
+                print(f"No new data received for {TIMEOUT} seconds. Stopping consumer.")
+                break
+            
+            time.sleep(1)
+            
     except KeyboardInterrupt:
         print("Consumer interrupted by user")
-        stream_query.stop()
     finally:
+        stream_query.stop()
         print("Consumer stopped")
         spark.stop()
 
 if __name__ == "__main__":
-    # Wait for Kafka to be ready
-    time.sleep(10)
-    
     # Start consuming
     main()
