@@ -8,6 +8,8 @@ This project demonstrates how to use Apache Kafka 4.0 with a PySpark consumer fo
 - **Consumer**: Uses PySpark Streaming to consume data from Kafka and write to Parquet files
 - **Kafka**: Runs in a Docker container using the official Apache Kafka 4.0 image
 
+![Architecture Diagram](https://d1qlp37w2ygoqn.cloudfront.net/diagram.png)
+
 ## Usage
 Build the images: 
 ```bash
