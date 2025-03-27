@@ -17,10 +17,13 @@ def cli():
     pass
 
 @cli.command()
-def produce():
+@click.option('--num-messages', '-n', type=click.IntRange(min=1), default=10, help='Number of messages to produce')
+def produce(num_messages):
     """Start producing data to Kafka"""
     try:
-        response = requests.post(f"{API_URL}/produce")
+        data = {"num_messages": num_messages}
+        headers = {'Content-Type': 'application/json'}
+        response = requests.post(f"{API_URL}/produce", json=data, headers=headers)
         click.echo(response.json()["message"])
     except requests.exceptions.RequestException as e:
         click.echo(f"Error: {str(e)}", err=True)
