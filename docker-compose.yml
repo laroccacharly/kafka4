@@ -4,6 +4,8 @@ services:
     container_name: broker
     ports:
       - 9092:9092
+    volumes:
+      - ./kafka-logs:/tmp/kafka-logs
     environment:
       KAFKA_NODE_ID: 1
       KAFKA_PROCESS_ROLES: broker,controller
@@ -43,8 +45,8 @@ services:
       dockerfile: Dockerfile.consumer
     container_name: consumer
     depends_on:
-      broker:
-        condition: service_healthy
+      producer:
+        condition: service_started
     volumes:
       - ./consume.py:/app/consume.py
       - ./data:/app/data
