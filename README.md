@@ -3,6 +3,8 @@
 Kafka 4.0 no longer requires Zookeeper. This significantly reduces its overhead and improves its usability. 
 Here is a demo project to help you get started with this powerful tool. We use docker-compose to set up the infrastructure and PySpark to convert the data into Parquet files. 
 
+[![Kafka 4.0 Demo](https://img.youtube.com/vi/GhwDNVH8joE/0.jpg)](https://youtu.be/GhwDNVH8joE)
+
 ## Architecture
 
 - **Producer**: Generates location data and sends it to a Kafka topic using the Confluent Kafka Python client
