@@ -39,13 +39,11 @@ class ProduceRequest(BaseModel):
     num_messages: PositiveInt = Field(default=DEFAULT_NUM_MESSAGES, description="Number of messages to produce")
 
 # Initialize Faker for generating realistic data
-
 def delivery_report(err, msg):
     """Callback for message delivery reports."""
     if err is not None:
         logger.error(f"Message delivery failed: {err}")
 
-        
 _producer = None
 def get_or_create_producer() -> Producer:
     """Create and return a Kafka producer instance."""
