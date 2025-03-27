@@ -1,6 +1,7 @@
 # Kafka 4.0 with PySpark Consumer
 
-This project demonstrates how to use Apache Kafka 4.0 with a PySpark consumer for high-performance data processing.
+Kafka 4.0 no longer requires Zookeeper. This significantly reduces its overhead and improves its usability. 
+Here is a demo project to help you get started with this powerful tool. We use docker-compose to set up the infrastructure and PySpark to convert the data into Parquet files. 
 
 ## Architecture
 
