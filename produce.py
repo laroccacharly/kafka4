@@ -167,5 +167,6 @@ def produce():
         }), status_code
 
 if __name__ == "__main__":
+    main(10) # produce some data at startup
     app.run(host='0.0.0.0', port=5000)
     
